@@ -10,10 +10,14 @@ GRID_HEIGHT = 40
 # Inicjalizacja dźwięku
 pygame.init()
 pygame.mixer.init()
-frequencies = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88]  # C D E F G A B
+frequencies = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88]  # C D E F G A H    4
+#frequencies = [130.81, 146.83, 164.81, 174.61, 196, 220, 246.94]  # C D E F G A H          3
+
 
 class GameOfLife:
-    def __init__(self, root):
+    duration = 0
+    def __init__(self, root, duration):
+        self.duration = duration
         self.root = root
         self.root.title("Gra w Życie - Conway")
 
@@ -45,6 +49,7 @@ class GameOfLife:
         self.manual = True
         self.draw_grid()
 
+    # ręczne ustawianie komórki
     def toggle_cell(self, event):
         if not self.running and self.manual:
             x = event.x // CELL_SIZE
@@ -52,6 +57,7 @@ class GameOfLife:
             self.grid[y][x] = 1 - self.grid[y][x]
             self.draw_grid()
 
+    # losowa generacja żywych komórek
     def random_mode(self):
         self.manual = False
         self.grid = [[random.choice([0, 1]) for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
@@ -85,6 +91,7 @@ class GameOfLife:
                     fill=color, outline="gray"
                 )
 
+    # tworzenie nowej generacji
     def run_game(self):
         if not self.running:
             return
@@ -104,7 +111,7 @@ class GameOfLife:
         self.grid = new_grid
         self.draw_grid()
         threading.Thread(target=self.play_sounds, daemon=True).start()
-        self.root.after(200, self.run_game)
+        self.root.after(self.duration, self.run_game)
 
     def count_neighbors(self, x, y):
         count = 0
@@ -117,6 +124,7 @@ class GameOfLife:
                     count += self.grid[ny][nx]
         return count
 
+    # Generowanie dzwięku
     def play_sounds(self):
         import numpy as np
         sample_rate = 44100
@@ -159,5 +167,5 @@ class GameOfLife:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = GameOfLife(root)
+    app = GameOfLife(root, 400)
     root.mainloop()
