@@ -3,21 +3,18 @@ import random
 import pygame
 import threading
 
-CELL_SIZE = 10
-GRID_WIDTH = 60
-GRID_HEIGHT = 40
+CELL_SIZE = 30   # Rozmiar komurki
+GRID_WIDTH = 30     # Ilość komórek szerokość
+GRID_HEIGHT = 20    #Ilość komórek wysokość
 
 # Inicjalizacja dźwięku
 pygame.init()
 pygame.mixer.init()
-frequencies = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88]  # C D E F G A H    4
-#frequencies = [130.81, 146.83, 164.81, 174.61, 196, 220, 246.94]  # C D E F G A H          3
 
 
 class GameOfLife:
-    duration = 0
     def __init__(self, root, duration):
-        self.duration = duration
+        self.duration = duration  # czas między generacjami w ms
         self.root = root
         self.root.title("Gra w Życie - Conway")
 
@@ -27,6 +24,7 @@ class GameOfLife:
         self.canvas = tk.Canvas(root, width=GRID_WIDTH * CELL_SIZE, height=GRID_HEIGHT * CELL_SIZE, bg='white')
         self.canvas.pack()
         self.canvas.bind("<Button-1>", self.toggle_cell)
+        self.canvas.bind("<B1-Motion>", self.paint_cell)
 
         self.menu_frame = tk.Frame(root)
         self.menu_frame.pack(pady=10)
@@ -46,10 +44,15 @@ class GameOfLife:
         self.clear_button = tk.Button(self.menu_frame, text="Wyczyść", command=self.clear_grid)
         self.clear_button.pack(side=tk.LEFT, padx=5)
 
+        self.save_button = tk.Button(self.menu_frame, text="Zapisz", command=self.save_grid)
+        self.save_button.pack(side=tk.LEFT, padx=5)
+
+        self.load_button = tk.Button(self.menu_frame, text="Wczytaj", command=self.load_grid)
+        self.load_button.pack(side=tk.LEFT, padx=5)
+
         self.manual = True
         self.draw_grid()
 
-    # ręczne ustawianie komórki
     def toggle_cell(self, event):
         if not self.running and self.manual:
             x = event.x // CELL_SIZE
@@ -57,7 +60,6 @@ class GameOfLife:
             self.grid[y][x] = 1 - self.grid[y][x]
             self.draw_grid()
 
-    # losowa generacja żywych komórek
     def random_mode(self):
         self.manual = False
         self.grid = [[random.choice([0, 1]) for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
@@ -80,18 +82,20 @@ class GameOfLife:
         self.grid = [[0 for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
         self.draw_grid()
 
-    def draw_grid(self):
+    def draw_grid(self, highlight_col=None):
         self.canvas.delete("all")
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                color = "black" if self.grid[y][x] == 1 else "white"
+                if highlight_col is not None and x == highlight_col:
+                    color = "blue" if self.grid[y][x] == 1 else "#ADD8E6"
+                else:
+                    color = "black" if self.grid[y][x] == 1 else "white"
                 self.canvas.create_rectangle(
                     x * CELL_SIZE, y * CELL_SIZE,
                     (x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE,
                     fill=color, outline="gray"
                 )
 
-    # tworzenie nowej generacji
     def run_game(self):
         if not self.running:
             return
@@ -110,8 +114,9 @@ class GameOfLife:
 
         self.grid = new_grid
         self.draw_grid()
-        threading.Thread(target=self.play_sounds, daemon=True).start()
-        self.root.after(self.duration, self.run_game)
+
+        # Uruchamiamy dźwięk w osobnym wątku, a po zakończeniu kontynuujemy grę
+        self.play_sounds_threaded()
 
     def count_neighbors(self, x, y):
         count = 0
@@ -124,31 +129,41 @@ class GameOfLife:
                     count += self.grid[ny][nx]
         return count
 
-    # Generowanie dzwięku
     def play_sounds(self):
         import numpy as np
+        import time
+
         sample_rate = 44100
-        duration = 200  # ms
+        duration = 100      # jak długo będzie generowany dźwięk
         max_freq = 1000
         min_freq = 220
+        delay = 0.05        # Jak szybko będę przeskakiwał przez te kolumny
 
-        # Podziel siatkę na kolumny i zlicz żywe komórki
         col_activity = [sum(self.grid[y][x] for y in range(GRID_HEIGHT)) for x in range(GRID_WIDTH)]
 
         for i, activity in enumerate(col_activity):
+            if not self.running:
+                break  # przerwij, jeśli gra została zatrzymana
+
+            self.root.after(0, self.draw_grid, i)
+
             if activity > 0:
-                # Zmapuj liczbę komórek (np. 0–GRID_HEIGHT) na zakres częstotliwości
                 freq = min_freq + (max_freq - min_freq) * (activity / GRID_HEIGHT)
-                threading.Thread(target=self.beep, args=(freq, duration)).start()
+                self.beep(freq, duration)
+
+            time.sleep(delay)
+
+        # Po zakończeniu dźwięku kontynuuj grę, jeśli nadal trwa
+        if self.running:
+            self.root.after(self.duration, self.run_game)
 
     def beep(self, freq, duration=200):
         import numpy as np
         sample_rate = 44100
         t = np.linspace(0, duration / 1000, int(sample_rate * duration / 1000), False)
 
-        # Fala sinusoidalna + prosty "fade" (envelope)
         wave = 0.5 * np.sin(2 * np.pi * freq * t)
-        envelope = np.linspace(1, 0, wave.shape[0])  # Opadająca głośność
+        envelope = np.linspace(1, 0, wave.shape[0])
         wave *= envelope
 
         stereo_wave = np.stack((wave, wave), axis=-1)
@@ -157,15 +172,52 @@ class GameOfLife:
         sound = pygame.sndarray.make_sound(audio)
         sound.play()
 
-    def sine_wave(self, freq, duration):
-        import numpy as np
-        sample_rate = 44100
-        t = np.linspace(0, duration / 1000, int(sample_rate * duration / 1000), False)
-        wave = np.sin(freq * t * 2 * np.pi)
-        audio = (wave * 32767).astype(np.int16)
-        return pygame.sndarray.make_sound(audio)
+    def play_sounds_threaded(self):
+        threading.Thread(target=self.play_sounds, daemon=True).start()
+
+    def save_grid(self):
+        from tkinter import filedialog
+        filepath = filedialog.asksaveasfilename(defaultextension=".txt",
+                                                filetypes=[("Pliki tekstowe", "*.txt")])
+        if not filepath:
+            return
+
+        with open(filepath, "w") as f:
+            for row in self.grid:
+                f.write(" ".join(map(str, row)) + "\n")
+
+    def load_grid(self):
+        from tkinter import filedialog
+        filepath = filedialog.askopenfilename(filetypes=[("Pliki tekstowe", "*.txt")])
+        if not filepath:
+            return
+
+        with open(filepath, "r") as f:
+            lines = f.readlines()
+
+        loaded_grid = []
+        for line in lines:
+            row = list(map(int, line.strip().split()))
+            loaded_grid.append(row)
+
+        # Dopasuj rozmiar jeśli plik ma inne wymiary
+        for y in range(min(len(loaded_grid), GRID_HEIGHT)):
+            for x in range(min(len(loaded_grid[y]), GRID_WIDTH)):
+                self.grid[y][x] = loaded_grid[y][x]
+
+        self.draw_grid()
+
+    def paint_cell(self, event):
+        if not self.running and self.manual:
+            x = event.x // CELL_SIZE
+            y = event.y // CELL_SIZE
+            if 0 <= x < GRID_WIDTH and 0 <= y < GRID_HEIGHT:
+                if self.grid[y][x] != 1:  # rysuj tylko jeśli zmieniamy coś
+                    self.grid[y][x] = 1
+                    self.draw_grid()
+
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = GameOfLife(root, 400)
+    app = GameOfLife(root, 400)  # 400 ms między generacjami
     root.mainloop()
