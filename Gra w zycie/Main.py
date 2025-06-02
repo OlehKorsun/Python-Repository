@@ -137,7 +137,7 @@ class GameOfLife:
         duration = 100      # jak długo będzie generowany dźwięk
         max_freq = 1000
         min_freq = 220
-        delay = 0.05        # Jak szybko będę przeskakiwał przez te kolumny
+        delay = 0.1        # Jak szybko będę przeskakiwał przez te kolumny
 
         col_activity = [sum(self.grid[y][x] for y in range(GRID_HEIGHT)) for x in range(GRID_WIDTH)]
 
