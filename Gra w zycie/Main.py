@@ -315,7 +315,6 @@ class GameOfLife:
 
 
     def beep(self, freq, duration=200):
-        import numpy as np
 
         """ 
         Generuje dźwięk sinusoidalny o zadanej częstotliwości i czasie trwania.
@@ -332,11 +331,12 @@ class GameOfLife:
         32767 to maksymalna wartość typu int16 (dla 16-bitowego dźwięku). 
         astype(np.int16) konwertuje dane na typ, którego pygame.sndarray.make_sound oczekuje.
 
-
         Args:
             freq (float): Częstotliwość dźwięku w Hz.
             duration (int, optional): Czas trwania w milisekundach. Domyślnie 200.
         """
+
+        import numpy as np
 
         sample_rate = 44100
         t = np.linspace(0, duration / 1000, int(sample_rate * duration / 1000), False)
